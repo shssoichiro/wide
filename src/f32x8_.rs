@@ -1612,6 +1612,66 @@ impl f32x8 {
   }
 
   #[inline]
+  // Unpack and interleave elements from the high half of each lane
+  pub fn interleave_high(self, b: Self) -> Self {
+    pick! {
+      if #[cfg(all(target_feature="avx"))] {
+        Self { avx: unpack_hi_m256(self.avx, b.avx) }
+      } else {
+        fn interleave_high_dwords(src1: &[u8; 16], src2: &[u8; 16]) -> [u8; 16] {
+          let mut dest = [u8; 16];
+          dest[..4].copy_from_slice(&src1[8..12]);
+          dest[4..8].copy_from_slice(&src2[8..12]);
+          dest[8..12].copy_from_slice(&src1[12..]);
+          dest[12..].copy_from_slice(&src2[12..]);
+          dest
+        }
+
+        let a: [u8; 32] = cast(self);
+        let b: [u8; 32] = cast(b);
+        let mut dest = [u8; 32];
+        dest[..16].copy_from_slice(
+          &interleave_high_dwords(&a[..16], &b[..16])
+        );
+        dest[16..].copy_from_slice(
+          &interleave_high_dwords(&a[16..], &b[16..])
+        );
+        dest
+      }
+    }
+  }
+
+  #[inline]
+  // Unpack and interleave elements from the low half of each lane
+  pub fn interleave_low(self, b: Self) -> Self {
+    pick! {
+      if #[cfg(all(target_feature="avx"))] {
+        Self { avx: unpack_lo_m256(self.avx, b.avx) }
+      } else {
+        fn interleave_low_dwords(src1: &[u8; 16], src2: &[u8; 16]) -> [u8; 16] {
+          let mut dest = [u8; 16];
+          dest[..4].copy_from_slice(&src1[..4]);
+          dest[4..8].copy_from_slice(&src2[..4]);
+          dest[8..12].copy_from_slice(&src1[4..8]);
+          dest[12..].copy_from_slice(&src2[4..8]);
+          dest
+        }
+
+        let a: [u8; 32] = cast(self);
+        let b: [u8; 32] = cast(b);
+        let mut dest = [u8; 32];
+        dest[..16].copy_from_slice(
+          &interleave_low_dwords(&a[..16], &b[..16])
+        );
+        dest[16..].copy_from_slice(
+          &interleave_low_dwords(&a[16..], &b[16..])
+        );
+        dest
+      }
+    }
+  }
+
+  #[inline]
   pub fn to_array(self) -> [f32; 8] {
     cast(self)
   }

@@ -1672,6 +1672,36 @@ impl f32x8 {
   }
 
   #[inline]
+  // Shuffle this and another f32x8 element together using a mask
+  pub fn shuffle<const IMM: i32>(self, b: Self) -> Self {
+    pick! {
+      if #[cfg(all(target_feature="avx"))] {
+        Self { avx: shuffle_m256::<IMM>(self.avx, b.avx) }
+      } else {
+        fn select(src: &[f32; 4], control: u8) -> f32 {
+          match control & 0b11 {
+            0 => cast(src[0]),
+            1 => cast(src[1]),
+            2 => cast(src[2]),
+            3 => cast(src[3]),
+            _ => unreachable!(),
+          }
+        }
+        let mut dest = [f32; 8];
+        dest[0] = select(&a[..4], unsafe { transmute::<_, u8>(IMM) } & 0b11);
+        dest[1] = select(&a[..4], unsafe { transmute::<_, u8>(IMM) >> 2 } & 0b11);
+        dest[2] = select(&b[..4], unsafe { transmute::<_, u8>(IMM) >> 4 } & 0b11);
+        dest[3] = select(&b[..4], unsafe { transmute::<_, u8>(IMM) >> 6 } & 0b11);
+        dest[4] = select(&a[4..], unsafe { transmute::<_, u8>(IMM) } & 0b11);
+        dest[5] = select(&a[4..], unsafe { transmute::<_, u8>(IMM) >> 2 } & 0b11);
+        dest[6] = select(&b[4..], unsafe { transmute::<_, u8>(IMM) >> 4 } & 0b11);
+        dest[7] = select(&b[4..], unsafe { transmute::<_, u8>(IMM) >> 6 } & 0b11);
+        f32x8::new(dest)
+      }
+    }
+  }
+
+  #[inline]
   pub fn to_array(self) -> [f32; 8] {
     cast(self)
   }

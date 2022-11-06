@@ -1696,6 +1696,38 @@ impl f64x4 {
   }
 
   #[inline]
+  // Shuffle this and another f64x4 element together using a mask
+  pub fn shuffle<const IMM: i32>(self, b: Self) -> Self {
+    pick! {
+      if #[cfg(all(target_feature="avx"))] {
+        Self { avx: shuffle_m256d::<IMM>(self.avx, b.avx) }
+      } else {
+        // SAFETY: i32 and u32 have the same size--we do this because we need a bitwise
+        // cast rather than a numerical cast.
+        // `IMM` really should just be a u8, but for some reason Rust's shuffle intrinsic
+        // takes an i32.
+        self.shuffle_nonconst(b, unsafe { transmute::<_, u32>(imm) } as u8)
+      }
+    }
+  }
+
+  #[inline]
+  // Shuffle this and another f64x4 element together using a mask.
+  //
+  // Rust's shuffle intrinsic requires that `IMM` be a constant.
+  // This method works around that restriction, but is likely to be slower.
+  pub fn shuffle_nonconst(self, b: Self, imm: u8) -> Self {
+    let mut dest = [0f64; 4];
+    let a = self.to_array();
+    let b = b.to_array();
+    dest[0] = if imm & (1 << 0) == 0 { a[0] } else { a[1] };
+    dest[1] = if imm & (1 << 1) == 0 { b[0] } else { b[1] };
+    dest[2] = if imm & (1 << 2) == 0 { a[2] } else { a[3] };
+    dest[3] = if imm & (1 << 3) == 0 { b[2] } else { b[3] };
+    f64x4::from(dest)
+  }
+
+  #[inline]
   pub fn to_array(self) -> [f64; 4] {
     cast(self)
   }

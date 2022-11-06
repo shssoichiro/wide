@@ -1,6 +1,5 @@
 use super::*;
 use std::hint::unreachable_unchecked;
-use std::mem::transmute;
 
 pick! {
   if #[cfg(target_feature="avx")] {
@@ -1706,15 +1705,24 @@ impl f32x8 {
         _ => unsafe { unreachable_unchecked() },
       }
     }
-    let mut dest = [f32; 8];
-    dest[0] = select(&a[..4], imm & 0b11);
-    dest[1] = select(&a[..4], (imm >> 2) & 0b11);
-    dest[2] = select(&b[..4], (imm >> 4) & 0b11);
-    dest[3] = select(&b[..4], (imm >> 6) & 0b11);
-    dest[4] = select(&a[4..], imm & 0b11);
-    dest[5] = select(&a[4..], (imm >> 2) & 0b11);
-    dest[6] = select(&b[4..], (imm >> 4) & 0b11);
-    dest[7] = select(&b[4..], (imm >> 6) & 0b11);
+    #[inline(always)]
+    fn cast_slice<const N: usize, T>(x: &[T]) -> &[T; N] {
+      // SAFETY: we perform a bounds check with [..N],
+      // so casting to *const [T; N] is valid because the bounds
+      // check guarantees that x has N elements
+      unsafe { &*(&x[..N] as *const [T] as *const [T; N]) }
+    }
+    let mut dest = [0f32; 8];
+    let a = self.to_array();
+    let b = b.to_array();
+    dest[0] = select(cast_slice(&a[..4]), imm & 0b11);
+    dest[1] = select(cast_slice(&a[..4]), (imm >> 2) & 0b11);
+    dest[2] = select(cast_slice(&b[..4]), (imm >> 4) & 0b11);
+    dest[3] = select(cast_slice(&b[..4]), (imm >> 6) & 0b11);
+    dest[4] = select(cast_slice(&a[4..]), imm & 0b11);
+    dest[5] = select(cast_slice(&a[4..]), (imm >> 2) & 0b11);
+    dest[6] = select(cast_slice(&b[4..]), (imm >> 4) & 0b11);
+    dest[7] = select(cast_slice(&b[4..]), (imm >> 6) & 0b11);
     f32x8::new(dest)
   }
 
